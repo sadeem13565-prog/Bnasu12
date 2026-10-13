@@ -8,32 +8,50 @@ permissions:
 
 jobs:
   extract:
+    name: Extract and Diagnose
     runs-on: ubuntu-latest
 
     steps:
+      - name: Start diagnostics
+        run: |
+          echo "Workflow started"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Branch: $GITHUB_REF_NAME"
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract ZIP into repository root
+      - name: Inspect repository files
         shell: bash
         run: |
-          set -euo pipefail
+          set -euxo pipefail
+          pwd
+          ls -la
+          find . -maxdepth 3 -type f -print
+
+      - name: Extract ZIP
+        shell: bash
+        run: |
+          set -euxo pipefail
 
           ZIP_FILE="StudioAI.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "ERROR: $ZIP_FILE not found in repository root."
+            echo "ERROR: StudioAI.zip not found at repository root"
             exit 1
           fi
 
           mkdir -p extracted_temp
           unzip -o "$ZIP_FILE" -d extracted_temp
 
+          echo "Files extracted:"
+          find extracted_temp -maxdepth 4 -print
+
           shopt -s dotglob nullglob
           items=(extracted_temp/*)
 
-          if [ ${#items[@]} -eq 0 ]; then
-            echo "ERROR: ZIP archive is empty."
+          if [ "${#items[@]}" -eq 0 ]; then
+            echo "ERROR: ZIP is empty"
             exit 1
           fi
 
@@ -50,18 +68,13 @@ jobs:
 
           rm -rf extracted_temp
 
-          if [ ! -d app ] || [ ! -f settings.gradle.kts ]; then
-            echo "ERROR: Expected Android project files were not found at the root."
-            echo "Check whether the ZIP contains an extra enclosing directory."
-            exit 1
-          fi
-
-          echo "Project files extracted successfully."
+          echo "Root files after extraction:"
+          ls -la
 
       - name: Commit extracted files
         shell: bash
         run: |
-          set -e
+          set -euxo pipefail
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -69,9 +82,9 @@ jobs:
           git add -A
 
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No changes to commit"
             exit 0
           fi
 
-          git commit -m "Extract Android project into repository root"
+          git commit -m "Extract project into repository root"
           git push
